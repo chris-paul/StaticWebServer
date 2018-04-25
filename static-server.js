@@ -8,9 +8,14 @@ const utils = require('./utils');
 
 class StaticServer {
     constructor() {
-        this.port = config.port;                /*默认端口*/
-        this.root = config.root;                /*文件根目录*/
-        this.indexPage = config.indexPage;      /*请求目录默认返回文件*/
+        this.port = config.port;                           /*默认端口*/
+        this.root = config.root;                           /*文件根目录*/
+        this.indexPage = config.indexPage;                 /*请求目录默认返回文件*/
+        this.enableCacheControl = config.cacheControl;     /*是否开启cacheControl*/
+        this.enableExpires = config.expires;               /*是否开启expires*/
+        this.enableETag = config.etag;                     /*是否开启etag*/
+        this.enableLastModified = config.lastModified;     /*是否开启lastModified*/ 
+        this.maxAge = config.maxAge;                       /*是否设置maxAge*/
     }
     /**
      * 返回资源404
@@ -66,12 +71,88 @@ class StaticServer {
                 if (stat.isDirectory()) {
                     this.respondDirectory(pathName, req, res);
                 }else {
-                    this.respondFile(pathName, req, res);
+                    this.respond(pathName, req, res);
                 }
             } else {
                 this.respondNotFound(req, res);
             }
         });
+    }
+    /**判断是否设置缓存
+     * @Author   LHK
+     * @DateTime 2018-04-26
+     * @version  [version]
+     * @param    {[type]}   pathName [description]
+     * @param    {[type]}   req      [description]
+     * @param    {[type]}   res      [description]
+     * @return   {[type]}            [description]
+     */
+    respond(pathName, req, res) {
+        fs.stat(pathName, (err, stat) => {
+            /*不会出错,上一部已经做了出错处理*/
+            this.setFreshHeaders(stat, res);
+            if (this.isFresh(req.headers, res._headers)) {
+                this.responseNotModified(res);
+            } else {
+                this.respondFile(pathName, req ,res);
+            }
+        })
+
+    }
+    /**获得文件的etag
+     * @Author   LHK
+     * @DateTime 2018-04-26
+     * @version  [version]
+     * @param    {[type]}   stat [description]
+     * @return   {[type]}        [description]
+     */
+    generateETag(stat) {
+        const mtime = stat.mtime.getTime().toString(16);
+        const size = stat.size.toString(16);
+        return `W/"${size}-${mtime}"`;
+    }
+    /**
+     * @Author   LHK
+     * @DateTime 2018-04-26
+     * @version  [version]
+     * @param    {[type]}   stat [description]
+     * @param    {[type]}   res  [description]
+     */
+    setFreshHeaders(stat, res) {
+        const lastModified = stat.mtime.toUTCString();
+        if (this.enableExpires) {
+            const expireTime = (new Date(Date.now() + this.maxAge * 1000)).toUTCString();
+            res.setHeader('Expires', expireTime);
+        }
+        if (this.enableCacheControl) {
+            res.setHeader('Cache-Control', `public, max-age=${this.maxAge}`);
+        }
+        if (this.enableLastModified) {
+            res.setHeader('Last-Modified', lastModified);
+        }
+        if (this.enableETag) {
+            res.setHeader('ETag', this.generateETag(stat));
+        }
+    }
+    responseNotModified(res) {
+        res.statusCode = 304;
+        res.end();
+    }
+    /**判断是否需要使用缓存的资源
+     * @Author   LHK
+     * @DateTime 2018-04-26
+     * @version  [version]
+     * @param    {[type]}   reqHeaders [description]
+     * @param    {[type]}   resHeaders [description]
+     * @return   {Boolean}             [description]
+     */
+    isFresh(reqHeaders, resHeaders) {
+        const  noneMatch = reqHeaders['if-none-match'];
+        const  lastModified = reqHeaders['if-modified-since'];
+        if (!(noneMatch || lastModified)) return false;
+        if(noneMatch && (noneMatch !== resHeaders['etag'])) return false;
+        if(lastModified && lastModified !== resHeaders['last-modified']) return false;
+        return true;
     }
     /**
      * 返回文件夹默认资源|返回文件夹内静态资源
@@ -86,7 +167,7 @@ class StaticServer {
     respondDirectory(pathName, req, res) {
         const indexPagePath = path.join(pathName, this.indexPage);
         if (fs.existsSync(indexPagePath)) {
-            this.respondFile(indexPagePath, req, res);
+            this.respond(indexPagePath, req, res);
         } else {
             fs.readdir(pathName, (err, files) => {
                 if (err) {
