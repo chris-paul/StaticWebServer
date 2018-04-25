@@ -1,0 +1,64 @@
+### 缓存机制
+
+#### Etag - Last-Modified
+
++ 1、客户端请求一个页面A
+
++ 2、服务器返回页面A，并在给A加上一个Last-Modified(Mon, 22 Mar 2018 10:10:10 GMT)和ETag(2e681a-6-5d044840)
+
++ 3、客户端展现该页面，并将页面连同Last-Modified/ETag一起缓存
+
++ 4、客户再次请求页面A，并将上次请求时服务器返回的Last-Modified/ETag一起传递给服务器，也就是说发送If-None-Match头,这个头的内容
+就是2e681a-6-5d044840,发送If-Modified-Since(Mon, 22 Mar 2018 10:10:10 GMT) 
+
++ 5、服务器判断发送过来的Etag和Last-Modified与本地匹配，如果没有修改，不返回200，返回304，直接返回响应304和一个空的响应体,当然响应头也会包含Last-Modified(Mon, 22 Mar 2018 10:10:10 GMT)和ETag(2e681a-6-5d044840)
+
+#### Cache-control
+
++ Cache-control判断浏览器是否需要发送请求而不需要服务器对比,常见的取值有private、no-cache、max-age、must- revalidate、no-store等，默认为private,Cache-control值为“no-cache”时,访问此页面不会在Internet临时文章夹留下页面备份
+
++ 1、打开新窗口
+	+ 值为private、no-cache、must-revalidate，那么打开新窗口访问时都会重新访问服务器。
+而如果指定了max-age值，那么在此值内的时间里就不会重新访问服务器，例如：
+Cache-control: max-age=5(表示当访问此网页后的5 秒 内再次访问不会去服务器)
+
++ 2、在地址栏回车
+	+ 值为private或must-revalidate则只有第一次访问时会访问服务器，以后就不再访问。
+值为no-cache，那么每次都会访问。
+值为max-age，则在过期之前不会重复访问
+
++ 3、按后退按扭
+	+ 值为private、must-revalidate、max-age，则不会重访问，
+值为no-cache，则每次都重复访问
+
++ 4、按刷新按扭或者F6
+	+ 无论为何值，都会重复访问
+
+#### Expires
++ Expires和max-age都可以用来指定文档的过期时间,但是也有不同
+
++ Expires指定一个绝对的过期时间(GMT格式)
+
++ max-age 指定的是从文档被访问后的存活时间，这个时间是个相对值(比如:3600s),相对的是文档第一次被请求时服务器记录的Request_time(请求时间)
+
++ 有的服务器, max-age是这样计算出来的,expires - request_time
+
+#### 静态资源服务器的缓存
++ 如果是第一次访问，请求报文首部不会包含相关字段，服务端在发送文件前做如下处理
+	+ 如服务器支持ETag，设置ETag头
+	+ 如服务器支持Last-Modified，设置Last-Modified头
+	+ 设置Expires头
+	+ 设置Cache-Control头（设置其max-age值）	
+浏览器收到响应后会存下这些标记，并在下次请求时带上与ETag对应的请求首部If-None-Match或与Last-Modified对应的请求首部If-Modified-Since
+
++ 如果是重复的请求
+	+ 浏览器判断缓存是否过期（通过Cache-Control和Expires确定）
+		+ 如果未过期，直接使用缓存内容，也就是强缓存命中，并不会产生新的请求
+		+ 如果已过期，会发起新的请求，并且请求会带上If-None-Match或If-Modified-Since，或者兼具两者
+		+ 服务器收到请求，进行缓存的新鲜度再验证：
+			+ 首先检查请求是否有If-None-Match首部，没有则继续下一步，有则将其值与文档的最新ETag匹配，失败则认为缓存不新鲜，成功则继续下一步
+			+ 接着检查请求是否有If-Modified-Since首部，没有则保留上一步验证结果，有则将其值与文档最新修改时间比较验证，失败则认为缓存不新鲜，成功则认为缓存新鲜
+			+ 当两个首部皆不存在或者验证结果是不新鲜时，发送200及最新文件，并在首部更新新鲜度。
+			+ 当验证结果是缓存仍然新鲜时（也就是弱缓存命中），不需发送文件，仅发送304，并在首部更新新鲜度
+#### 附：
+https://blog.csdn.net/kikikind/article/details/6266101(Etag与HTTP缓存机制)	
