@@ -2,6 +2,7 @@ const http = require('http');
 const path = require('path');
 const fs = require('fs');
 const url = require('url');
+const zlib = require('zlib');
 const config = require('./config/default');
 const mime = require('./mime');
 const utils = require('./utils');
@@ -16,6 +17,7 @@ class StaticServer {
         this.enableETag = config.etag;                     /*是否开启etag*/
         this.enableLastModified = config.lastModified;     /*是否开启lastModified*/ 
         this.maxAge = config.maxAge;                       /*是否设置maxAge*/
+        this.zipMatch = new RegExp(config.zipMatch);       /*压缩哪些文件*/
     }
     /**
      * 返回资源404
@@ -45,7 +47,12 @@ class StaticServer {
     respondFile(pathName, req, res) {
         res.setHeader('Content-Type', mime.lookup(pathName));
         console.info('请求的资源的类型是--',mime.lookup(pathName));
-        const readStream = fs.createReadStream(pathName);
+        /*是否应该压缩*/
+        let isCompress = path.extname(pathName).match(this.zipMatch);
+        let readStream = fs.createReadStream(pathName);
+        if(isCompress){
+            readStream = this.compressHandler(readStream, req, res);
+        }
         readStream.pipe(res);
     }
     /**
@@ -191,6 +198,28 @@ class StaticServer {
             });
         }
     }
+    /**
+     * 对文件内容进行压缩,支持gzip和deflate
+     * @Author   LHK
+     * @DateTime 2018-04-26
+     * @version  [version]
+     * @param    {[type]}   readStream [description]
+     * @param    {[type]}   req        [description]
+     * @param    {[type]}   res        [description]
+     * @return   {[type]}              [description]
+     */
+    compressHandler(readStream, req, res) {
+       const acceptEncoding = req.headers['accept-encoding'];
+       if (!acceptEncoding || !acceptEncoding.match(/\b(gzip|deflate)\b/)) {
+           return readStream;
+       } else if (acceptEncoding.match(/\bgzip\b/)) {
+           res.setHeader('Content-Encoding', 'gzip');
+           return readStream.pipe(zlib.createGzip());
+       } else if (acceptEncoding.match(/\bdeflate\b/)) {
+           res.setHeader('Content-Encoding', 'deflate');
+           return readStream.pipe(zlib.createDeflate());
+       }
+   }
     start() {
         http.createServer((req, res) => {
             //规范化url并链接
