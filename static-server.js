@@ -7,6 +7,22 @@ const config = require('./config/default');
 const mime = require('./mime');
 const utils = require('./utils');
 
+
+
+var options = require( "yargs" )
+    .option( "p", { alias: "port",  describe: "端口号", type: "number" } )
+    .option( "r", { alias: "root", describe: "静态资源的根目录", type: "string" } )
+    .option( "i", { alias: "index", describe: "默认文件", type: "string" } )
+    .option( "c", { alias: "cachecontrol", default: true, describe: "开启Cache-Control缓存", type: "boolean" } )
+    .option( "e", { alias: "expires", default: true, describe: "开启Expires缓存", type: "boolean" } )
+    .option( "t", { alias: "etag", default: true, describe: "开启ETag缓存", type: "boolean" } )
+    .option( "l", { alias: "lastmodified", default: true, describe: "开启Last-Modified缓存", type: "boolean" } )
+    .option( "m", { alias: "maxage", describe: "开启文件有效期的缓存", type: "number" } )
+    .help()
+    .alias( "?", "help" )
+    .argv;
+
+
 class StaticServer {
     constructor() {
         this.port = config.port;                           /*默认端口*/
