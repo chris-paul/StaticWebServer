@@ -39,17 +39,25 @@ class StaticServer {
      * @Author   LHK
      * @DateTime 2018-04-25
      * @version  [version]
+     * @param    {[type]}   stat     [文件信息]
      * @param    {[type]}   pathName [请求资源路径]
      * @param    {[type]}   req      [请求体]
      * @param    {[type]}   res      [返回体]
      * @return   {[type]}            [description]
      */
-    respondFile(pathName, req, res) {
+    respondFile(stat,pathName, req, res) {
         res.setHeader('Content-Type', mime.lookup(pathName));
+        res.setHeader('Accept-Ranges', 'bytes');
         console.info('请求的资源的类型是--',mime.lookup(pathName));
+        let readStream;
         /*是否应该压缩*/
         let isCompress = path.extname(pathName).match(this.zipMatch);
-        let readStream = fs.createReadStream(pathName);
+        if (req.headers['range']) {
+            readStream = this.rangeHandler(pathName, req.headers['range'], stat.size, res);
+            if (!readStream) return;
+        } else {
+            readStream = fs.createReadStream(pathName);
+        }
         if(isCompress){
             readStream = this.compressHandler(readStream, req, res);
         }
@@ -96,12 +104,12 @@ class StaticServer {
      */
     respond(pathName, req, res) {
         fs.stat(pathName, (err, stat) => {
-            /*不会出错,上一部已经做了出错处理*/
+            /*设置缓存的头部信息*/
             this.setFreshHeaders(stat, res);
             if (this.isFresh(req.headers, res._headers)) {
                 this.responseNotModified(res);
             } else {
-                this.respondFile(pathName, req ,res);
+                this.respondFile(stat,pathName, req ,res);
             }
         })
 
@@ -220,6 +228,30 @@ class StaticServer {
            return readStream.pipe(zlib.createDeflate());
        }
    }
+   /**
+    * 允许只请求文件的一部分
+    * @Author   LHK
+    * @DateTime 2018-04-27
+    * @version  [version]
+    * @param    {[type]}   pathName  [description]
+    * @param    {[type]}   rangeText [description]
+    * @param    {[type]}   totalSize [description]
+    * @param    {[type]}   res       [description]
+    * @return   {[type]}             [description]
+    */
+    rangeHandler(pathName, rangeText, totalSize, res) {
+        const range = this.getRange(rangeText, totalSize);
+        if (range.start > totalSize || range.end > totalSize || range.start > range.end) {
+            res.statusCode = 416;
+            res.setHeader('Content-Range', `bytes */${totalSize}`);
+            res.end();
+            return null;
+        } else {
+            res.statusCode = 206;
+            res.setHeader('Content-Range', `bytes ${range.start}-${range.end}/${totalSize}`);
+            return fs.createReadStream(pathName, { start: range.start, end: range.end });
+        }
+    }
     start() {
         http.createServer((req, res) => {
             //规范化url并链接
