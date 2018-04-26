@@ -25,15 +25,15 @@ var options = require( "yargs" )
 
 class StaticServer {
     constructor() {
-        this.port = config.port;                           /*默认端口*/
-        this.root = config.root;                           /*文件根目录*/
-        this.indexPage = config.indexPage;                 /*请求目录默认返回文件*/
-        this.enableCacheControl = config.cacheControl;     /*是否开启cacheControl*/
-        this.enableExpires = config.expires;               /*是否开启expires*/
-        this.enableETag = config.etag;                     /*是否开启etag*/
-        this.enableLastModified = config.lastModified;     /*是否开启lastModified*/ 
-        this.maxAge = config.maxAge;                       /*是否设置maxAge*/
-        this.zipMatch = new RegExp(config.zipMatch);       /*压缩哪些文件*/
+        this.port = options.p || config.port;                           /*默认端口*/
+        this.root = options.r || config.root;                           /*文件根目录*/
+        this.indexPage = options.i || config.indexPage                  /*请求目录默认返回文件*/
+        this.enableCacheControl = options.c || config.cacheControl;     /*是否开启cacheControl*/
+        this.enableExpires = options.e ||config.expires;                /*是否开启expires*/
+        this.enableETag = options.t || config.etag;                     /*是否开启etag*/
+        this.enableLastModified = options.l || config.lastModified;     /*是否开启lastModified*/ 
+        this.maxAge = options.m ||config.maxAge;                        /*是否设置maxAge*/
+        this.zipMatch = new RegExp(config.zipMatch);                    /*压缩哪些文件*/
     }
     /**
      * 返回资源404
